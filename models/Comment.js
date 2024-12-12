@@ -3,17 +3,18 @@ const mongoose = require('mongoose');
 const commentSchema = new mongoose.Schema({
   body: {
     type: String,
-    required: true
+    required: true, // Ensures the comment body is mandatory
   },
   postid: {
-    type: String, // Adjust the type to String
-    required: true
+    type: mongoose.Schema.Types.ObjectId, // Reference to Post document
+    ref: 'Post',
+    required: true, // Ensures the post ID is mandatory
   },
-  username:{
-    type:String,
-    requried:true
-  }
-
+  userid: {
+    type: mongoose.Schema.Types.ObjectId, // Reference to User document
+    ref: 'User',
+    required: true, // Ensures the user ID is mandatory
+  },
 });
 
-module.exports = mongoose.model('comment', commentSchema);
+module.exports = mongoose.model('Comment', commentSchema);

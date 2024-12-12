@@ -1,5 +1,5 @@
 const express=require("express")
-const { addComment, getPostComments,delcomment } = require("../controllers/comment")
+const { addComment, getPostComments,delcomment } = require("../controllers/comment.controller")
 const router=express.Router()
 
 router.route("/:postid/:username").post(addComment)
