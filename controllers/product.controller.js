@@ -1,4 +1,5 @@
 const Products = require('../models/Product');
+const mongoose = require('mongoose');
 
 // Get all products
 const getProducts = async (req, res) => {
@@ -14,11 +15,26 @@ const getProducts = async (req, res) => {
 const getSingleProduct = async (req, res) => {
     try {
         const { id } = req.params;
+
+        // Step 1: Get product by ID
         const product = await Products.findById(id);
         if (!product) {
             return res.status(404).json({ message: "Product not found" });
         }
-        res.status(200).json({ success: true, data: product });
+
+        // Step 2: Use the product's name to search in predictive_price
+        const predictivePriceCollection = mongoose.connection.collection('predictive_price');
+        const predictivePriceData = await predictivePriceCollection.findOne({ title: product.name });
+
+        // Step 3: Return both product and predictive price data
+        res.status(200).json({
+            success: true,
+            data: {
+                product,
+                predictive_price: predictivePriceData || null
+            }
+        });
+
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
@@ -67,7 +83,33 @@ const updateProduct = async (req, res) => {
 };
 const filterProducts = async (req, res) => {
     try {
-        const { minPrice, maxPrice, brand, category, specifications } = req.query;
+        let { minPrice, maxPrice, brand, category, specifications } = req.query;
+
+        // Lowercase string inputs for case-insensitive filtering
+        if (brand) {
+            brand = brand.toLowerCase();
+        }
+        if (category) {
+            category = category.toLowerCase();
+        }
+        if (specifications) {
+            try {
+                // Parse specifications JSON
+                const specFilters = JSON.parse(specifications);
+
+                // Convert spec filter values to lowercase
+                Object.keys(specFilters).forEach(key => {
+                    if (specFilters[key] && typeof specFilters[key] === 'string') {
+                        specFilters[key] = specFilters[key].toLowerCase();
+                    }
+                });
+
+                // Reassign lowercased specs back to specifications
+                specifications = JSON.stringify(specFilters);
+            } catch (err) {
+                return res.status(400).json({ success: false, message: 'Invalid specifications format' });
+            }
+        }
 
         // Build the filter object dynamically
         let filter = {};
@@ -79,27 +121,26 @@ const filterProducts = async (req, res) => {
             if (maxPrice) filter.prices.$lte = parseFloat(maxPrice);
         }
 
-        // Filter by brand
+        // For text fields, use case-insensitive regex match
         if (brand) {
-            filter.brand = brand;
+            filter.brand = { $regex: new RegExp(`^${brand}$`, 'i') };
         }
 
-        // Filter by category
         if (category) {
-            filter.category = category;
+            filter.category = { $regex: new RegExp(`^${category}$`, 'i') };
         }
 
-        // Filter by specifications (Map type)
+        // Filter by specifications (case-insensitive)
         if (specifications) {
             try {
-                // Parse the specifications string into an object
                 const specFilters = JSON.parse(specifications);
 
-                // Iterate over the parsed object and apply it to the filter
                 Object.entries(specFilters).forEach(([key, value]) => {
                     if (key && value) {
-                        // Query the Map field in MongoDB with the key-value pair
-                        filter[`specifications.${key}`] = value; 
+                        const dbKey = `specifications.${key.charAt(0).toUpperCase() + key.slice(1)}`;
+
+                        // Use regex for case-insensitive matching on specs
+                        filter[dbKey] = { $regex: new RegExp(`^${value}$`, 'i') };
                     }
                 });
             } catch (err) {
@@ -110,7 +151,6 @@ const filterProducts = async (req, res) => {
         // Query the database with the filter object
         const products = await Products.find(filter);
 
-        // Check if products were found
         if (!products.length) {
             return res.status(404).json({ success: false, message: 'No products found' });
         }
@@ -123,11 +163,40 @@ const filterProducts = async (req, res) => {
 
 
 
+// Search products by name or product (partial, case-insensitive)
+const searchProducts = async (req, res) => {
+  try {
+    const { query } = req.query;
+
+    if (!query) {
+      return res.status(400).json({ success: false, message: 'Search query is required' });
+    }
+
+    // Use a regex for case-insensitive partial matching on the 'name' field
+    const regex = new RegExp(query, 'i');
+
+    // Find products where 'name' matches the regex
+    const products = await Products.find({
+      name: { $regex: regex }
+    });
+
+    if (!products.length) {
+      return res.status(404).json({ success: false, message: 'No products found matching your search' });
+    }
+
+    res.status(200).json({ success: true, data: products });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
 module.exports = {
     getProducts,
     getSingleProduct,
     createProduct,
     deleteProduct,
     updateProduct,
-    filterProducts
+    filterProducts,
+    searchProducts
 };
