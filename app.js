@@ -2,7 +2,7 @@ const express = require('express')
 const cors = require('cors')
 const app = express()
 const ProductRouter = require('./routes/product.routes')
-const AuthRoute = require('./routes/auth.routes')
+// const AuthRoute = require('./routes/auth.routes')
 const connectDB = require("./db/connect");
 
 
@@ -19,7 +19,7 @@ const port = process.env.PORT || 3002
 // app.use("/auth",)
 
 app.use('/product',ProductRouter)
-app.use('/auth',AuthRoute)
+// app.use('/auth',AuthRoute)
 const start= async ()=>{
     try {
         await connectDB(process.env.MONGO_URI);
